@@ -1,0 +1,10 @@
+services:
+  dashboard:
+    build: .
+    image: dashboard-ia
+    container_name: dashboard-ia
+    ports:
+      - "8501:8501"
+    # Descomentá para cambiar el CSV sin reconstruir la imagen:
+    # volumes:
+    #   - ./datos_limpios_ia.csv:/app/datos_limpios_ia.csv
