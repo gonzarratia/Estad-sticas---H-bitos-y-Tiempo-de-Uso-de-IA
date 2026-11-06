@@ -483,41 +483,10 @@ def render_numeric_tab(data: pd.DataFrame) -> None:
     section_header("02 · Centro y posición", "Medidas de tendencia central y posición", "Cuantiles calculados mediante interpolación lineal entre observaciones ordenadas.")
     central = central_position_table(age, time)
     st.dataframe(style_plain_table(central), hide_index=True, use_container_width=True)
-    st.markdown(
-        "<div class='interpretation'><b>Lectura:</b> "
-        + "<br>".join([
-            skew_interpretation("Edad", age),
-            skew_interpretation("Tiempo de uso", time),
-        ])
-        + "</div>",
-        unsafe_allow_html=True,
-    )
 
-    section_header("03 · Variabilidad", "Medidas de dispersión", "La varianza y la desviación típica son muestrales (ddof = 1).")
+    section_header("03 · Variabilidad", "Medidas de dispersión")
     dispersion = dispersion_table(age, time)
     st.dataframe(style_plain_table(dispersion), hide_index=True, use_container_width=True)
-    st.markdown(
-        "<div class='interpretation'><b>Lectura:</b> "
-        + "<br>".join([
-            cv_interpretation("edad", age),
-            cv_interpretation("tiempo de uso", time),
-        ])
-        + "</div>",
-        unsafe_allow_html=True,
-    )
-
-    with st.expander("Notas metodológicas", expanded=False):
-        st.markdown("Los resultados describen la **muestra** observada y no se generalizan a la población.")
-        st.markdown("**Cuantiles.** Interpolación lineal entre observaciones ordenadas, equivalente a PERCENTIL.INC de Excel; $Q_2$ es la mediana y $D_9$ el percentil 90.")
-        st.markdown("**Moda.** Es el valor o los valores más frecuentes; puede no existir una moda repetida o puede haber varias.")
-        st.markdown("**Intervalos.** $k = \\lceil 1 + \\log_2(n) \\rceil$; $A = \\lceil \\mathrm{rango}/k \\rceil$. Cada clase es $[L_i,L_s)$, salvo la última, que incluye el máximo.")
-        st.markdown("**Marca de clase.** $x_i = (L_i + L_s)/2$. Frecuencias: $f_i$ absoluta; $n_i=f_i/n$; $F_i=\\sum_{j=1}^{i} f_j$; $N_i=\\sum_{j=1}^{i} n_j$.")
-        st.markdown("**Dispersión.** Rango $=\\max-\\min$; desviación media $DM=(1/n)\\sum |x_i-\\bar{x}|$.")
-        st.latex(r"s^2 = \frac{1}{n-1}\sum_{i=1}^{n}(x_i-\bar{x})^2 \quad (ddof=1)")
-        st.markdown(r"Desviación típica muestral: $s=\sqrt{s^2}$. Coeficiente de variación: $CV=(s/|\bar{x}|)\cdot100$.")
-        st.latex(r"G_1 = \frac{n}{(n-1)(n-2)} \cdot \sum_{i=1}^{n} \left(\frac{x_i-\bar{x}}{s}\right)^3")
-        st.warning("Con n pequeño, G₁ es sensible a valores extremos; interpreta la asimetría con cautela.")
-        st.caption(f"En la vista actual: n = {len(data)} observaciones. Cada estadístico usa sus valores no faltantes.")
 
 
 def render_visual_tab(data: pd.DataFrame) -> None:
@@ -579,6 +548,14 @@ def render_visual_tab(data: pd.DataFrame) -> None:
                               "font": {"size": 16, "color": "#17243b", "family": "Inter, sans-serif"}}],
             )
             draw_plot(pie, 390)
+            st.dataframe(
+                style_plain_table(pd.DataFrame({
+                    "Herramienta": names + ["Total"],
+                    "Frecuencia absoluta": [str(int(v)) for v in values] + [str(total)],
+                    "Porcentaje": [f"{format_number(v / total * 100, 1)} %" for v in values] + ["100,0 %"],
+                })),
+                hide_index=True, use_container_width=True,
+            )
 
     with column_purpose:
         section_header("02 · Motivos", "¿Para qué se usa la IA?", "Frecuencia absoluta de selección; una persona puede seleccionar más de una finalidad.")
@@ -605,6 +582,17 @@ def render_visual_tab(data: pd.DataFrame) -> None:
         purpose_chart.update_xaxes(tickformat="d", showgrid=True)
         purpose_chart.update_layout(yaxis={"categoryorder": "total ascending"})
         draw_plot(purpose_chart, 390)
+        purposes_table = purposes.sort_values("Frecuencia absoluta", ascending=False)
+        st.dataframe(
+            style_plain_table(pd.DataFrame({
+                "Finalidad": purposes_table["Finalidad"].tolist(),
+                "Frecuencia absoluta": [str(int(v)) for v in purposes_table["Frecuencia absoluta"]],
+                "% de personas": [
+                    f"{format_number(v / len(data) * 100, 1)} %" for v in purposes_table["Frecuencia absoluta"]
+                ],
+            })),
+            hide_index=True, use_container_width=True,
+        )
 
     column_experience, column_histogram = st.columns([1, 1], gap="large")
     with column_experience:
@@ -630,6 +618,18 @@ def render_visual_tab(data: pd.DataFrame) -> None:
         experience_chart.update_xaxes(categoryorder="array", categoryarray=EXPERIENCE_ORDER)
         experience_chart.update_yaxes(tickformat="d")
         draw_plot(experience_chart, 390)
+        level_total = int(experience_counts["Frecuencia absoluta"].sum())
+        st.dataframe(
+            style_plain_table(pd.DataFrame({
+                "Nivel": experience_counts["Nivel"].tolist() + ["Total"],
+                "Frecuencia absoluta": [str(int(v)) for v in experience_counts["Frecuencia absoluta"]] + [str(level_total)],
+                "Porcentaje": [
+                    f"{format_number(v / level_total * 100, 1)} %" if level_total else "N/D"
+                    for v in experience_counts["Frecuencia absoluta"]
+                ] + ["100,0 %" if level_total else "N/D"],
+            })),
+            hide_index=True, use_container_width=True,
+        )
 
     with column_histogram:
         section_header("04 · Distribución", "Tiempo de uso", "Histograma por intervalos con polígono de frecuencias cerrado en cero.")
@@ -691,67 +691,92 @@ def render_visual_tab(data: pd.DataFrame) -> None:
                 margin={"l": 18, "r": 20, "t": 58, "b": 72},
             )
             draw_plot(histogram, 390)
+            st.dataframe(
+                style_plain_table(pd.DataFrame({
+                    "Intervalo": table["Intervalo"].tolist() + ["Total"],
+                    "Marca de clase (xᵢ)": [format_number(x) for x in table["Marca de clase (xᵢ)"]] + ["—"],
+                    "Frecuencia absoluta (fᵢ)": [str(int(x)) for x in table["Frecuencia absoluta (fᵢ)"]]
+                    + [str(int(table["Frecuencia absoluta (fᵢ)"].sum()))],
+                })),
+                hide_index=True, use_container_width=True,
+            )
 
-    section_header("05 · Asociación", "Frecuencia semanal y tiempo de uso", "Puntos coincidentes se agrupan; el tamaño indica cuántas personas comparten cada coordenada y nivel.")
-    scatter_data = data[["frecuencia_semanal", "tiempo_uso", "nivel_experiencia"]].dropna(
-        subset=["frecuencia_semanal", "tiempo_uso", "nivel_experiencia"]
+    section_header(
+        "05 · Asociación",
+        "Frecuencia semanal y tiempo de uso",
+        "Cada barra muestra el tiempo mediano de uso de las personas que usan IA ese número de días por semana.",
     )
-    if scatter_data.empty:
+    pairs = data[["frecuencia_semanal", "tiempo_uso"]].dropna()
+    if pairs.empty:
         st.info("No hay pares completos de frecuencia_semanal y tiempo_uso para mostrar.")
     else:
-        grouped = (
-            scatter_data.groupby(
-                ["frecuencia_semanal", "tiempo_uso", "nivel_experiencia"],
-                observed=True,
-                dropna=False,
+        by_days = (
+            pairs.groupby("frecuencia_semanal")["tiempo_uso"]
+            .agg(personas="size", mediana="median")
+            .reset_index()
+            .sort_values("frecuencia_semanal")
+            .reset_index(drop=True)
+        )
+        by_days["dias"] = by_days["frecuencia_semanal"].map(format_boundary)
+        by_days["etiqueta"] = by_days["mediana"].map(lambda value: format_number(value, 1))
+        
+        bars = px.bar(
+            by_days,
+            x="dias",
+            y="mediana",
+            text="etiqueta",
+            custom_data=["personas", "etiqueta"],
+            title="Tiempo mediano de uso según los días de uso por semana",
+            labels={"dias": "Días de uso por semana", "mediana": "Tiempo mediano de uso (minutos)"},
+            color_discrete_sequence=["#3563e9"],
+        )
+        bars.update_traces(
+            textposition="outside",
+            cliponaxis=False,
+            marker_line_width=0,
+            hovertemplate=(
+                "Días por semana: %{x}<br>Tiempo mediano: %{customdata[1]} min"
+                "<br>Personas: %{customdata[0]}<extra></extra>"
+            ),
+        )
+        bars.update_xaxes(
+            title_text="Días de uso por semana",
+            type="category", categoryorder="array", categoryarray=by_days["dias"].tolist(),
+        )
+        bars.update_yaxes(
+            title_text="Tiempo mediano de uso (minutos)",
+            range=[0, max(float(by_days["mediana"].max()) * 1.18, 1.0)],
+        )
+        draw_plot(bars, 400)
+        
+        st.dataframe(
+            style_plain_table(pd.DataFrame({
+                "Días de uso por semana": by_days["dias"].tolist(),
+                "Personas (n)": [str(int(v)) for v in by_days["personas"]],
+                "Tiempo mediano (min)": by_days["etiqueta"].tolist(),
+            })),
+            hide_index=True, use_container_width=True,
+        )
+        
+        top = by_days.loc[by_days["mediana"].idxmax()]
+        reading = (
+            f"<b>Lectura:</b> el mayor tiempo mediano ({format_number(top['mediana'], 1)} min) "
+            f"corresponde a quienes usan IA {top['dias']} días por semana."
+        )
+        st.markdown(f"<div class='interpretation'>{reading}</div>", unsafe_allow_html=True)
+        pearson = pairs.corr(method="pearson").iloc[0, 1]
+        if pd.notna(pearson):
+            strength = (
+                "prácticamente no hay relación" if abs(pearson) < 0.1
+                else "relación débil" if abs(pearson) < 0.3
+                else "relación moderada" if abs(pearson) < 0.7
+                else "relación fuerte"
             )
-            .size()
-            .reset_index(name="n_personas")
-        )
-        grouped = grouped.sort_values("n_personas", ascending=False, kind="mergesort")
-        grouped["nivel_experiencia"] = pd.Categorical(
-            grouped["nivel_experiencia"], categories=EXPERIENCE_ORDER, ordered=True
-        )
-        scatter = px.scatter(
-            grouped,
-            x="frecuencia_semanal",
-            y="tiempo_uso",
-            color="nivel_experiencia",
-            size="n_personas",
-            size_max=32,
-            category_orders={"nivel_experiencia": EXPERIENCE_ORDER},
-            color_discrete_map=LEVEL_COLORS,
-            hover_data={"n_personas": True, "frecuencia_semanal": True, "tiempo_uso": True},
-            title="Frecuencia semanal frente a duración de uso",
-            labels={
-                "frecuencia_semanal": "Frecuencia semanal (días por semana)",
-                "tiempo_uso": "Tiempo de uso (minutos)",
-                "nivel_experiencia": "Nivel de experiencia",
-                "n_personas": "Número de personas",
-            },
-        )
-        scatter.update_traces(marker={"opacity": 0.86, "line": {"color": "#ffffff", "width": 1.5}})
-        scatter.update_xaxes(tickmode="array", tickvals=sorted(scatter_data["frecuencia_semanal"].unique()),
-                             ticktext=[format_boundary(value) for value in sorted(scatter_data["frecuencia_semanal"].unique())])
-        y_ticks = list(range(0, 361, 60))
-        scatter.update_yaxes(
-            tickmode="array", tickvals=y_ticks,
-            ticktext=[format_boundary(value) for value in y_ticks],
-            range=[0, 400],
-        )
-        scatter.update_layout(
-            legend={
-                "title": {"text": "Nivel de experiencia", "font":
-                          {"color": "#17243b", "family": "Inter, DM Sans, Arial, sans-serif"}},
-                "font": {"color": "#263653", "family": "Inter, DM Sans, Arial, sans-serif"},
-            }
-        )
-        draw_plot(scatter, 430)
-        pearson = scatter_data[["frecuencia_semanal", "tiempo_uso"]].corr(method="pearson").iloc[0, 1]
-        st.caption(
-            f"Correlación de Pearson: r = {format_number(pearson)} · "
-            f"n = {len(scatter_data)} pares completos. Correlación describe asociación, no causalidad."
-        )
+            direction = "" if abs(pearson) < 0.1 else (" positiva" if pearson > 0 else " negativa")
+            st.caption(
+                f"Correlación de Pearson: r = {format_number(pearson)} ({strength}{direction}) · "
+                f"n = {len(pairs)} pares completos. La correlación describe asociación, no causalidad."
+            )
 
 
 def main() -> None:
@@ -784,7 +809,6 @@ def main() -> None:
                 "experience_filter",
                 "age_range_filter",
                 "tool_filter",
-                "exclude_outliers_filter",
             ):
                 st.session_state.pop(key, None)
             st.rerun()
@@ -820,11 +844,6 @@ def main() -> None:
             default=tool_options,
             key="tool_filter",
         )
-        exclude_outliers = st.toggle(
-            "Excluir valores atípicos de tiempo de uso (regla de Tukey: fuera de [Q1 − 1,5·RIC, Q3 + 1,5·RIC])",
-            value=False,
-            key="exclude_outliers_filter",
-        )
 
     if selected_experience == "Todos":
         filtered = raw_data.copy()
@@ -835,24 +854,6 @@ def main() -> None:
         filtered["edad"].between(selected_age_range[0], selected_age_range[1], inclusive="both")
         & filtered["herramienta_ia"].astype("string").isin(selected_tools)
     ].copy()
-    data_before_tukey = filtered.copy()
-    outlier_status = None
-
-    if exclude_outliers and not filtered.empty:
-        valid_time = pd.to_numeric(filtered["tiempo_uso"], errors="coerce").dropna()
-        if not valid_time.empty:
-            q1 = valid_time.quantile(0.25, interpolation="linear")
-            q3 = valid_time.quantile(0.75, interpolation="linear")
-            iqr = q3 - q1
-            lower_bound = q1 - 1.5 * iqr
-            upper_bound = q3 + 1.5 * iqr
-            time_numeric = pd.to_numeric(filtered["tiempo_uso"], errors="coerce")
-            keep_rows = time_numeric.isna() | time_numeric.between(
-                lower_bound, upper_bound, inclusive="both"
-            )
-            filtered = filtered.loc[keep_rows].copy()
-        outlier_status = f"Sin atípicos (n = {len(filtered)} de {len(data_before_tukey)})"
-
     data = filtered
     st.sidebar.caption(f"Registros en la vista: n = {len(data)} / {len(raw_data)}")
 
@@ -863,11 +864,7 @@ def main() -> None:
     if len(data) < 10:
         st.warning(f"Muestra muy pequeña (n = {len(data)}): interpretar con cautela")
 
-    filter_description = (
-        outlier_status
-        if outlier_status is not None
-        else f"Nivel: {selected_experience if selected_experience != 'Todos' else 'Todos los niveles'}"
-    )
+    filter_description = f"Nivel: {selected_experience if selected_experience != 'Todos' else 'Todos los niveles'}"
     st.markdown(
         f"""
         <div class="hero">
@@ -879,8 +876,6 @@ def main() -> None:
         """,
         unsafe_allow_html=True,
     )
-    if outlier_status is not None:
-        st.caption("Análisis de sensibilidad, no limpieza de datos.")
 
     tab_numeric, tab_visual = st.tabs(
         ["Análisis estadístico numérico", "Visualizaciones interactivas"]
@@ -889,12 +884,6 @@ def main() -> None:
         render_numeric_tab(data)
     with tab_visual:
         render_visual_tab(data)
-
-    st.divider()
-    st.caption(
-        f"Vista actual: n = {len(data)} observaciones de una muestra empírica. "
-        "Los faltantes se excluyen variable por variable; no se imputan en este dashboard."
-    )
 
 
 if __name__ == "__main__":
